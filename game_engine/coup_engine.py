@@ -25,6 +25,7 @@ class Phase(Enum):
     WAITING_FOR_BLOCK = auto()
     RESOLUTION = auto()
     GAME_OVER = auto()
+    LOBBY = auto()
 
 
 class Action(Enum):
@@ -99,11 +100,11 @@ class Deck:
 
 
 class GameState:
-    def __init__(self, player_names: List[str]):
-        if not (2 <= len(player_names) <= 6):
+    def __init__(self, players: List[str]):
+        if not (2 <= len(players) <= 6):
             raise ValueError("Coup requires 2-6 players")
 
-        self.players: List[Player] = [Player(name) for name in player_names]
+        self.players: List[Player] = [Player(name) for name in players]
         self.deck = Deck()
 
         self.turn_index: int = 0
