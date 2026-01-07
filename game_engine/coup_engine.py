@@ -25,6 +25,7 @@ class Phase(Enum):
     WAITING_FOR_BLOCK = auto()
     RESOLUTION = auto()
     GAME_OVER = auto()
+    LOBBY = auto()
 
 
 class Action(Enum):

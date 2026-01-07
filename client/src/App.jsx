@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 const WS_URL = "ws://localhost:8000";
 
@@ -29,20 +29,27 @@ export default function App() {
     ws.onclose = () => {
       setConnected(false);
       wsRef.current = null;
+      setState(null);
     };
   };
 
+  const send = (payload) => {
+    wsRef.current?.send(JSON.stringify(payload));
+  };
+
   const sendAction = (action, target = null) => {
-    wsRef.current?.send(JSON.stringify({
-      type: "action",
-      action,
-      target
-    }));
+    send({ type: "action", action, target });
   };
 
   const challenge = () => {
-    wsRef.current?.send(JSON.stringify({ type: "challenge" }));
+    send({ type: "challenge" });
   };
+
+  const startGame = () => {
+    send({ type: "start_game" });
+  };
+
+  /* ---------------- CONNECT SCREEN ---------------- */
 
   if (!connected) {
     return (
@@ -60,16 +67,49 @@ export default function App() {
     );
   }
 
+  /* ---------------- LOBBY ---------------- */
+
+  if (!state || state.phase === "LOBBY") {
+    const isHost = state?.players?.[0]?.name === name;
+
+    return (
+      <div style={{ padding: 20 }}>
+        <h2>Lobby</h2>
+        <p>Waiting for players...</p>
+
+        <h3>Players</h3>
+        <ul>
+          {state?.players.map((p) => (
+            <li key={p.name}>
+              {p.name} {p.name === state.players[0].name && "👑"}
+            </li>
+          ))}
+        </ul>
+
+        {isHost && (
+          <button
+            onClick={startGame}
+            disabled={state.players.length < 2}
+          >
+            Start Game
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  /* ---------------- GAME ---------------- */
+
   return (
     <div style={{ padding: 20 }}>
       <h2>You are {name}</h2>
 
-      <h3>Phase: {state?.phase}</h3>
-      <h3>Turn: {state?.current_player}</h3>
+      <h3>Phase: {state.phase}</h3>
+      <h3>Turn: {state.current_player}</h3>
 
       <h3>Players</h3>
       <ul>
-        {state?.players.map(p => (
+        {state.players.map((p) => (
           <li key={p.name}>
             {p.name} — 💰 {p.coins} — 
             Influences: {Array.isArray(p.influences)
@@ -80,7 +120,7 @@ export default function App() {
         ))}
       </ul>
 
-      {state?.current_player === name && (
+      {state.current_player === name && (
         <>
           <h3>Actions</h3>
           <button onClick={() => sendAction("INCOME")}>Income</button>
@@ -89,7 +129,7 @@ export default function App() {
         </>
       )}
 
-      {state?.phase === "WAITING_FOR_CHALLENGE" && (
+      {state.phase === "WAITING_FOR_CHALLENGE" && (
         <>
           <h3>Challenge?</h3>
           <button onClick={challenge}>Challenge</button>
