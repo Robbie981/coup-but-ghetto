@@ -2,12 +2,14 @@ from enum import Enum, auto
 from typing import List, Optional
 import random
 
+
 STARTING_COINS = 2
 STARTING_INFLUENCE = 2
 
 COUP_COST = 7
 ASSASSINATE_COST = 3
 FORCED_COUP_COINS = 10
+
 
 class Role(Enum):
     DUKE = auto()
@@ -17,7 +19,6 @@ class Role(Enum):
     CONTESSA = auto()
 
 
-# States of FSM
 class Phase(Enum):
     WAITING_FOR_ACTION = auto()
     ACTION_DECLARED = auto()
@@ -36,6 +37,7 @@ class Action(Enum):
     ASSASSINATE = auto()
     EXCHANGE = auto()
     STEAL = auto()
+
 
 ACTION_TO_ROLE = {
     Action.TAX: Role.DUKE,
@@ -59,7 +61,7 @@ class Player:
     @property
     def alive(self) -> bool:
         return len(self.influences) > 0
-    
+
     def influence_count(self) -> int:
         return len(self.influences)
 
@@ -81,11 +83,11 @@ class Deck:
 
     def build(self):
         self.cards = (
-            [Role.DUKE] * 3 +
-            [Role.ASSASSIN] * 3 +
-            [Role.CAPTAIN] * 3 +
-            [Role.AMBASSADOR] * 3 +
-            [Role.CONTESSA] * 3
+            [Role.DUKE] * 3
+            + [Role.ASSASSIN] * 3
+            + [Role.CAPTAIN] * 3
+            + [Role.AMBASSADOR] * 3
+            + [Role.CONTESSA] * 3
         )
         random.shuffle(self.cards)
 
@@ -100,20 +102,24 @@ class Deck:
 
 
 class GameState:
-    def __init__(self, players: List[str]):
-        if not (2 <= len(players) <= 6):
+    def __init__(self, player_names: List[str]):
+        if not (2 <= len(player_names) <= 6):
             raise ValueError("Coup requires 2-6 players")
 
-        self.players: List[Player] = [Player(name) for name in players]
+        self.players: List[Player] = [Player(name.upper()) for name in player_names]
         self.deck = Deck()
 
         self.turn_index: int = 0
         self.phase: Phase = Phase.WAITING_FOR_ACTION
 
-        # Pending action info (used during challenges / blocks)
+        # Pending action info
         self.pending_action: Optional[Action] = None
         self.pending_actor: Optional[Player] = None
         self.pending_target: Optional[Player] = None
+
+        # Exchange state
+        self.awaiting_exchange_choice: bool = False
+        self.exchange_cards: List[Role] = []
 
         self._start_game()
 
@@ -128,6 +134,7 @@ class GameState:
         return self.players[self.turn_index]
 
     def _get_player_by_name(self, name: str) -> Player:
+        name = name.upper()
         for p in self.players:
             if p.name == name:
                 return p
@@ -149,30 +156,45 @@ class GameState:
         action: Action,
         target_name: Optional[str] = None,
     ):
-        # --- Phase check ---
+        # --- Global validation ---
         if self.phase != Phase.WAITING_FOR_ACTION:
             raise RuntimeError("Not ready for a new action")
 
         actor = self._get_player_by_name(actor_name)
 
-        # --- Turn check ---
         if actor != self.current_player():
             raise RuntimeError("It is not your turn")
 
-        # --- Forced coup rule ---
+        # Forced coup rule
         if actor.coins >= FORCED_COUP_COINS and action != Action.COUP:
             raise RuntimeError("Must coup when holding 10 or more coins")
 
-        target = None
-        if target_name:
-            target = self._get_player_by_name(target_name)
+        target = self._resolve_target(actor, target_name)
 
-        # --- Cost validation ---
-        if action == Action.ASSASSINATE and actor.coins < ASSASSINATE_COST:
-            raise RuntimeError("Not enough coins to assassinate")
+        # --- Action-specific validation ---
+        if action == Action.INCOME:
+            self._validate_income(actor)
 
-        if action == Action.COUP and actor.coins < COUP_COST:
-            raise RuntimeError("Not enough coins to coup")
+        elif action == Action.FOREIGN_AID:
+            self._validate_foreign_aid(actor)
+
+        elif action == Action.COUP:
+            self._validate_coup(actor, target)
+
+        elif action == Action.TAX:
+            self._validate_tax(actor)
+
+        elif action == Action.ASSASSINATE:
+            self._validate_assassinate(actor, target)
+
+        elif action == Action.EXCHANGE:
+            self._validate_exchange(actor)
+
+        elif action == Action.STEAL:
+            self._validate_steal(actor, target)
+
+        else:
+            raise RuntimeError(f"Unsupported action: {action}")
 
         # --- Store pending action ---
         self.pending_action = action
@@ -180,22 +202,69 @@ class GameState:
         self.pending_target = target
 
         # --- Decide next phase ---
+        self.phase = self._phase_for_action(action)
+
+    def _resolve_target(
+        self,
+        actor: Player,
+        target_name: Optional[str],
+    ) -> Optional[Player]:
+        if target_name is None:
+            return None
+
+        target = self._get_player_by_name(target_name)
+
+        if not target.alive:
+            raise RuntimeError("Target player is already eliminated")
+
+        if target == actor:
+            raise RuntimeError("Cannot target yourself")
+
+        return target
+
+    def _phase_for_action(self, action: Action) -> Phase:
         if action in (
             Action.TAX,
             Action.STEAL,
             Action.ASSASSINATE,
             Action.EXCHANGE,
         ):
-            # These actions involve a role claim
-            self.phase = Phase.WAITING_FOR_CHALLENGE
+            return Phase.WAITING_FOR_CHALLENGE
 
-        elif action == Action.FOREIGN_AID:
-            # Blockable but not challengeable
-            self.phase = Phase.WAITING_FOR_BLOCK
+        if action == Action.FOREIGN_AID:
+            return Phase.WAITING_FOR_BLOCK
 
-        else:
-            # Income and Coup resolve immediately
-            self.phase = Phase.RESOLUTION
+        return Phase.RESOLUTION
+
+    def _validate_income(self, actor: Player):
+        pass
+
+    def _validate_foreign_aid(self, actor: Player):
+        pass
+
+    def _validate_coup(self, actor: Player, target: Optional[Player]):
+        if target is None:
+            raise RuntimeError("Coup requires a target")
+
+        if actor.coins < COUP_COST:
+            raise RuntimeError("Not enough coins to coup")
+
+    def _validate_tax(self, actor: Player):
+        pass
+
+    def _validate_assassinate(self, actor: Player, target: Optional[Player]):
+        if target is None:
+            raise RuntimeError("Assassinate requires a target")
+
+        if actor.coins < ASSASSINATE_COST:
+            raise RuntimeError("Not enough coins to assassinate")
+
+    def _validate_exchange(self, actor: Player):
+        pass
+
+    def _validate_steal(self, actor: Player, target: Optional[Player]):
+        if target is None:
+            raise RuntimeError("Steal requires a target")
 
     def resolve_action(self):
         if self.phase != Phase.RESOLUTION:
@@ -206,7 +275,7 @@ class GameState:
         target = self.pending_target
 
         if action == Action.INCOME:
-            actor.coins += 5
+            actor.coins += 1
 
         elif action == Action.FOREIGN_AID:
             actor.coins += 2
@@ -221,36 +290,26 @@ class GameState:
 
         elif action == Action.ASSASSINATE:
             actor.coins -= ASSASSINATE_COST
-            # influence loss handled later (after block)
+            # Influence loss handled later after block/challenge flow
 
         elif action == Action.COUP:
-            # Pay coup cost to kill
             actor.coins -= COUP_COST
-            
-            # Do checks
-            if target is None:
-                raise RuntimeError("No COUP target provided")
-            if not target.alive:
-                raise RuntimeError("This guy is already dead")
-            
-            # Target loses influence. For now just automatically lose the first influence
-            # TODO: have player choose which influence to lose
-            lost_influence = target.influences[0]
+            lost_influence = target.influences[0] # TODO: have player select which influence to lose, right now it auto loses the first one in the list
             target.lose_influence(lost_influence)
 
         elif action == Action.EXCHANGE:
-            # Draw two cards; choice handled later
             self.exchange_cards = [
                 self.deck.draw(),
                 self.deck.draw(),
             ]
             self.awaiting_exchange_choice = True
 
-        # Cleanup + next turn
+        # Cleanup pending action
         self.pending_action = None
         self.pending_actor = None
         self.pending_target = None
 
+        # Reset exchange state for now
         self.awaiting_exchange_choice = False
         self.exchange_cards = []
 
@@ -261,10 +320,6 @@ class GameState:
         else:
             self.phase = Phase.WAITING_FOR_ACTION
 
-    def _check_game_over(self) -> bool:
-        alive = [p for p in self.players if p.alive]
-        return len(alive) <= 1
-    
     def apply_challenge(self, challenger_name: str):
         if self.phase != Phase.WAITING_FOR_CHALLENGE:
             raise RuntimeError("No action available to challenge")
@@ -280,22 +335,21 @@ class GameState:
         if required_role is None:
             raise RuntimeError("This action cannot be challenged")
 
-        # --- Check if actor actually has the role ---
+        # Actor actually has the required role -> challenge fails
         if required_role in actor.influences:
-            # Challenge FAILED — challenger loses influence
             self._handle_failed_challenge(challenger)
 
-            # Actor reveals role, returns it, draws new one
+            # Actor reveals the card, returns it, and redraws
             actor.influences.remove(required_role)
             actor.revealed.append(required_role)
             self.deck.return_card(required_role)
             actor.influences.append(self.deck.draw())
 
-            # Action succeeds
+            # Claimed action continues
             self.phase = Phase.RESOLUTION
 
+        # Actor does not have the role -> challenge succeeds
         else:
-            # Challenge SUCCESSFUL — actor loses influence
             self._handle_failed_challenge(actor)
 
             # Action is canceled
@@ -316,3 +370,7 @@ class GameState:
         self.pending_action = None
         self.pending_actor = None
         self.pending_target = None
+
+    def _check_game_over(self) -> bool:
+        alive = [p for p in self.players if p.alive]
+        return len(alive) <= 1

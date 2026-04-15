@@ -14,12 +14,12 @@ Commands:
   action <ACTION> [TARGET]
       -> declare action
       -> ex: action TAX
-      -> ex: action STEAL Bob
-      -> ex: action COUP Alice
+      -> ex: action STEAL BOB
+      -> ex: action COUP ALICE
 
   challenge <PLAYER>
       -> challenge pending action
-      -> ex: challenge Bob
+      -> ex: challenge BOB
 
   resolve
       -> resolve current action
@@ -34,6 +34,12 @@ def print_game_summary(gs: GameState):
     print(f"Current player: {gs.current_player().name}")
     print("--------------------------------")
 
+    print("\n========== PENDING ACTION ==========")
+    print(f"Pending action: {gs.pending_action.name if gs.pending_action else None}")
+    print(f"Pending actor: {gs.pending_actor.name if gs.pending_actor else None}")
+    print(f"Pending target: {gs.pending_target.name if gs.pending_target else None}")
+    print("--------------------------------")
+
     print("\n========== DECK ==========")
     print(f"Deck size: {len(gs.deck.cards)}")
     print(f"Deck: {[r.name.lower() for r in gs.deck.cards]}")
@@ -41,11 +47,12 @@ def print_game_summary(gs: GameState):
 
     print("\n========== PLAYERS ==========")
     for p in gs.players:
-        print(f"name= {p.name:8} | "
+        print(
+            f"name={p.name:8} | "
             f"influences={[r.name.lower() for r in p.influences]} | "
-            f"revealed={[r.name for r in p.revealed]} | "
+            f"revealed={[r.name.lower() for r in p.revealed]} | "
             f"alive={p.alive} | "
-            f"num coins={p.coins}"
+            f"coins={p.coins}"
         )
     print("--------------------------------\n")
 
@@ -55,8 +62,9 @@ def main():
     names = input("Enter player names (comma separated): ")
     players = [n.strip() for n in names.split(",") if n.strip()]
 
-    gs = GameState([p.upper() for p in players])
+    gs = GameState(players)
 
+    help_menu()
     print_game_summary(gs)
 
     while True:
@@ -77,7 +85,6 @@ def main():
                     print_game_summary(gs)
 
                 case "ACTION":
-                    # action TAX Bob or action INCOME
                     action = Action[cmd[1]]
                     target = cmd[2] if len(cmd) > 2 else None
                     gs.apply_action(gs.current_player().name, action, target)
@@ -99,7 +106,6 @@ def main():
             break
         except Exception as e:
             print("ERROR:", e)
-
 
 if __name__ == "__main__":
     try:
