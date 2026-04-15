@@ -166,8 +166,6 @@ class GameState:
         target = None
         if target_name:
             target = self._get_player_by_name(target_name)
-            if not target.alive:
-                raise RuntimeError("Target player is already eliminated")
 
         # --- Cost validation ---
         if action == Action.ASSASSINATE and actor.coins < ASSASSINATE_COST:
@@ -208,7 +206,7 @@ class GameState:
         target = self.pending_target
 
         if action == Action.INCOME:
-            actor.coins += 1
+            actor.coins += 5
 
         elif action == Action.FOREIGN_AID:
             actor.coins += 2
@@ -226,8 +224,19 @@ class GameState:
             # influence loss handled later (after block)
 
         elif action == Action.COUP:
+            # Pay coup cost to kill
             actor.coins -= COUP_COST
-            # influence loss handled later
+            
+            # Do checks
+            if target is None:
+                raise RuntimeError("No COUP target provided")
+            if not target.alive:
+                raise RuntimeError("This guy is already dead")
+            
+            # Target loses influence. For now just automatically lose the first influence
+            # TODO: have player choose which influence to lose
+            lost_influence = target.influences[0]
+            target.lose_influence(lost_influence)
 
         elif action == Action.EXCHANGE:
             # Draw two cards; choice handled later

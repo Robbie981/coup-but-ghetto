@@ -24,7 +24,7 @@ Commands:
   resolve
       -> resolve current action
 
-  quit
+  exit
       -> exit
 """)
 
@@ -55,39 +55,39 @@ def main():
     names = input("Enter player names (comma separated): ")
     players = [n.strip() for n in names.split(",") if n.strip()]
 
-    gs = GameState(players)
+    gs = GameState([p.upper() for p in players])
 
     print_game_summary(gs)
 
     while True:
         try:
-            cmd = input("> ").strip().split()
+            cmd = input("> ").upper().strip().split()
 
             if not cmd:
                 continue
 
             match cmd[0]:
-                case "quit":
+                case "EXIT":
                     break
 
-                case "help":
+                case "HELP":
                     help_menu()
 
-                case "show state":
+                case "STATE":
                     print_game_summary(gs)
 
-                case "action":
-                    # action TAX Bob
+                case "ACTION":
+                    # action TAX Bob or action INCOME
                     action = Action[cmd[1]]
                     target = cmd[2] if len(cmd) > 2 else None
                     gs.apply_action(gs.current_player().name, action, target)
                     print("Action declared.")
 
-                case "challenge":
+                case "CHALLENGE":
                     gs.apply_challenge(cmd[1])
                     print("Challenge processed.")
 
-                case "resolve":
+                case "RESOLVE":
                     gs.resolve_action()
                     print("Action resolved.")
 
