@@ -294,31 +294,21 @@ class GameState:
 
         elif action == Action.COUP:
             actor.coins -= COUP_COST
-            lost_influence = target.influences[0] # TODO: have player select which influence to lose, right now it auto loses the first one in the list
+            lost_influence = target.influences[0]  # TODO: have player select which influence to lose, right now it auto loses the first one in the list
             target.lose_influence(lost_influence)
 
+        # TODO: yeash exchange is just broken...
         elif action == Action.EXCHANGE:
             self.exchange_cards = [
                 self.deck.draw(),
                 self.deck.draw(),
             ]
-            self.awaiting_exchange_choice = True
-
-        # Cleanup pending action
-        self.pending_action = None
-        self.pending_actor = None
-        self.pending_target = None
-
+            self.awaiting_exchange_choice = True  # TODO: have player select which influence to exchange
         # Reset exchange state for now
         self.awaiting_exchange_choice = False
         self.exchange_cards = []
 
-        self.advance_turn()
-
-        if self._check_game_over():
-            self.phase = Phase.GAME_OVER
-        else:
-            self.phase = Phase.WAITING_FOR_ACTION
+        self._finish_turn()
 
     def apply_challenge(self, challenger_name: str):
         if self.phase != Phase.WAITING_FOR_CHALLENGE:
@@ -351,15 +341,7 @@ class GameState:
         # Actor does not have the role -> challenge succeeds
         else:
             self._handle_failed_challenge(actor)
-
-            # Action is canceled
-            self._clear_pending_action()
-            self.advance_turn()
-
-            if self._check_game_over():
-                self.phase = Phase.GAME_OVER
-            else:
-                self.phase = Phase.WAITING_FOR_ACTION
+            self._finish_turn()
 
     def _handle_failed_challenge(self, player: Player):
         # For now, auto-lose first influence
@@ -374,3 +356,39 @@ class GameState:
     def _check_game_over(self) -> bool:
         alive = [p for p in self.players if p.alive]
         return len(alive) <= 1
+    
+    def pass_block(self):
+        if self.phase != Phase.WAITING_FOR_BLOCK:
+            raise RuntimeError("Not waiting for a block")
+
+        # Nobody blocked, so action can now resolve
+        self.phase = Phase.RESOLUTION
+
+    def apply_block(self, blocker_name: str):
+        if self.phase != Phase.WAITING_FOR_BLOCK:
+            raise RuntimeError("Not waiting for a block")
+
+        blocker = self._get_player_by_name(blocker_name)
+
+        if not blocker.alive:
+            raise RuntimeError("Dead player cannot block")
+
+        if blocker == self.pending_actor:
+            raise RuntimeError("You cannot block your own action")
+
+        # TODO: Add support to block other actions, for now only support FOREIGN_AID block
+        if self.pending_action != Action.FOREIGN_AID:
+            raise RuntimeError("Only FOREIGN_AID block is implemented right now")
+        
+        # TODO: Later this block itself can be challenged, should transition into waiting for challenge
+        # Block succeeds immediately for now
+        self._finish_turn()
+            
+    def _finish_turn(self):
+        self._clear_pending_action()
+        self.advance_turn()
+
+        if self._check_game_over():
+            self.phase = Phase.GAME_OVER
+        else:
+            self.phase = Phase.WAITING_FOR_ACTION

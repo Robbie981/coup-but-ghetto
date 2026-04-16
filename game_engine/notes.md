@@ -14,6 +14,7 @@ Setup:
 Normal gameplay (state machine):
     - Waiting for action (***NEXT STEP IS TO TEST THESE ACTIONS)
         - Income (take 1 coin) -> good
+        - Coup (7 coins to kill) -> good enough for now (need to allow target to choose a card to lose)
         - Foreign Aid (take 2 coins) * can be blocked -> good enough for now
         - Tax (Take 3 coins)
         - Assassinate (3 coins to kill) * can be blocked

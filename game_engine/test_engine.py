@@ -98,6 +98,23 @@ def main():
                     gs.resolve_action()
                     print("Action resolved.")
 
+                # force game state into a certain phase
+                case "FORCE":
+                    try:
+                        gs.phase = Phase[cmd[1]]
+                        print(f"Forced game phase into {gs.phase.name}")
+                    except KeyError:
+                        print(f"Invalid phase: {cmd[1]}")
+                        print("Valid phases:", ", ".join(p.name for p in Phase))
+                        
+                case "BLOCK":
+                    gs.apply_block(cmd[1])
+                    print("Block applied.")
+
+                case "PASS":
+                    gs.pass_block()
+                    print("No block declared. Moving to resolution.")
+
                 case _:
                     print("Unknown command.")
 
